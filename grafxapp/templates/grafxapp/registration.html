@@ -1,0 +1,25 @@
+{% extends 'grafxapp/base.html' %}
+
+{% block content %}
+<h2>Register</h2>
+<form method="post">
+  {% csrf_token %}
+  <div class="form-group">
+    <label for="firstName">First Name:</label>
+    <input type="text" id="firstName" name="first_name" class="form-control">
+  </div>
+  <div class="form-group">
+    <label for="lastName">Last Name:</label>
+    <input type="text" id="lastName" name="last_name" class="form-control">
+  </div>
+  <div class="form-group">
+    <label for="username">Username:</label>
+    <input type="text" id="username" name="username" class="form-control">
+  </div>
+  <div class="form-group">
+    <label for="password">Password:</label>
+    <input type="password" id="password" name="password" class="form-control">
+  </div>
+  <button type="submit" class="btn btn-primary">Register</button>
+</form>
+{% endblock %}

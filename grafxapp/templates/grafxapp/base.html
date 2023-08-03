@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.18.3/extensions/filter-control/bootstrap-table-filter-control.min.css">
+
+    <style> body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+    .content {
+        flex: 1;
+    }
+    .bootstrap-table .fixed-table-loading {
+    display: none;
+}
+ </style>    
+    {% block header %}{% endblock %}
+</head>
+<body class="d-flex flex-column">
+    <div class="content">
+    <!-- Navigation Bar -->
+<!-- Navigation Bar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <a class="navbar-brand" href="{% url 'grafxapp:index' %}">Dealership Review</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" 
+            aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav mr-auto">
+        <li class="nav-item active">
+          <a class="nav-link" href="{% url 'grafxapp:about' %}">About</a>
+        </li>
+        <li class="nav-item active">
+          <a class="nav-link" href="{% url 'grafxapp:contact' %}">Contact</a>
+        </li>
+        <!-- other nav items -->
+      </ul>
+      {% if user.is_authenticated %}
+      <span class="navbar-text mr-2">Hello, {{ user.first_name }}</span>
+      <a class="btn btn-danger my-2 my-sm-0" href="{% url 'grafxapp:logout' %}">Signout</a>
+      {% else %}
+      <form class="form-inline my-2 my-lg-0 ml-auto" action="{% url 'grafxapp:login' %}" method="post">
+        {% csrf_token %}
+        <input class="form-control mr-sm-2" type="text" placeholder="Username" name="username">
+        <input class="form-control mr-sm-2" type="password" placeholder="Password" name="password">
+        <button class="btn btn-primary my-2 my-sm-0" type="submit">Login</button>
+      </form>
+      
+      <ul class="navbar-nav ml-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'grafxapp:register' %}">Signup</a>
+        </li>
+      </ul>
+      {% endif %}
+    </div>
+  </nav>
+    
+    <!-- Page Content -->
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+    </div>
+    <footer class="footer mt-auto py-3 bg-light">
+        <div class="container">
+          <span class="text-muted">© 2023 KO-Graphs. All rights reserved. | <a href="{% url 'grafxapp:contact' %}">Contact Us</a></span>
+        </div>
+      </footer>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.18.3/bootstrap-table.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.18.3/extensions/filter-control/bootstrap-table-filter-control.min.js"></script>
+    <script>
+        $(function() {
+            $('#table').bootstrapTable()
+        })
+    </script>
+</body>
+</html>

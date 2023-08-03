@@ -1,0 +1,11 @@
+<!-- in grafxapp/templates/grafxapp/graph_form.html -->
+{% extends 'grafxapp/base.html' %}
+
+{% block content %}
+  <h2>Graph Parameters</h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create Graph</button>
+  </form>
+{% endblock %}

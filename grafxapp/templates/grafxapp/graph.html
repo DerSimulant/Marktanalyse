@@ -1,0 +1,71 @@
+{% extends "grafxapp/base.html" %}
+{% load static %}
+
+{% block title %}
+Herr Graf
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Der geile Graf</h1>
+    <div id="d3-container"></div>
+</div>
+
+<!-- Einbinden von D3.js -->
+<script src="https://d3js.org/d3.v5.min.js"></script>
+
+<!-- Ihr D3.js-Code -->
+<script>
+d3.json("{% static 'graph.json' %}").then(function(graph) {
+  // Breite und Höhe des SVG-Containers
+  var width = 960,
+      height = 500,
+      radius = 5;  // Radius der Knoten
+
+  // Erstellen Sie einen SVG-Container
+  var svg = d3.select("#d3-container").append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+  // Erstellen Sie eine D3-Kraftsimulation
+  var simulation = d3.forceSimulation()
+      .force("link", d3.forceLink().id(function(d) { return d.id; }))
+      .force("charge", d3.forceManyBody())
+      .force("center", d3.forceCenter(width / 2, height / 2));
+
+  // Fügen Sie die Knoten und Kanten zum SVG-Container hinzu
+  var link = svg.append("g")
+      .selectAll("line")
+      .data(graph.links)
+      .enter().append("line")
+      .style("stroke", "red")
+      .attr("stroke-width", 2);
+
+  var node = svg.append("g")
+      .selectAll("circle")
+      .data(graph.nodes)
+      .enter().append("circle")
+      .attr("r", radius)
+      .on("click", function(d) { 
+          // Zeigen Sie die Zentralität des Knotens an, wenn auf ihn geklickt wird
+          alert("Degree centrality: " + d.centrality); 
+      });
+
+  // Aktualisieren Sie die Knoten- und Kantenpositionen bei jeder "Tick" der Simulation
+  simulation.nodes(graph.nodes).on("tick", ticked);
+  simulation.force("link").links(graph.links);
+
+  function ticked() {
+    link
+        .attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; });
+
+    node
+        .attr("cx", function(d) { return d.x = Math.max(radius, Math.min(width - radius, d.x)); })  // Knoten innerhalb des horizontalen Bereichs halten
+        .attr("cy", function(d) { return d.y = Math.max(radius, Math.min(height - radius, d.y)); });  // Knoten innerhalb des vertikalen Bereichs halten
+  }
+});
+</script>
+{% endblock %}
