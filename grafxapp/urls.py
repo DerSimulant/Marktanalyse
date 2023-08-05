@@ -12,5 +12,7 @@ urlpatterns = [
     path('login/', views.login_request, name='login'),
     path('logout/', views.logout_request, name='logout'),
     path('form/', views.graph_form, name='graph_form'),
-    path('graph/', views.graph, name='graph'),
+    #path('graph/', views.graph, name='graph'),
+    path('upload_csv/', views.upload_csv, name='upload_csv'),
+    path('graph/', views.display_graph, name='display_graph'),
 ]

@@ -3,7 +3,7 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.contrib.auth.models import User
 from django.shortcuts import render, redirect
 from django.urls import reverse
-
+from django.shortcuts import get_object_or_404
 # from .models import related models
 # from .restapis import related methods
 from django.contrib.auth import login, logout, authenticate
@@ -14,8 +14,11 @@ import json
 
 from .forms import GraphForm
 import networkx as nx
-
-
+from .forms import UploadCSVForm
+from .models import Node, Edge
+from io import TextIOWrapper
+import csv
+from .models import Node, Edge, GraphProperties
 
 
 
@@ -129,6 +132,114 @@ def graph_form(request):
     else:
         form = GraphForm()
     return render(request, 'grafxapp/graph_form.html', {'form': form})
+
+#CSV hochladen und Daten in Datenbank speichern
+def upload_csv(request):
+    if request.method == 'POST':
+        form = UploadCSVForm(request.POST, request.FILES)
+        if form.is_valid():
+
+            # Löschen der alten Daten aus der Datenbank
+            Node.objects.all().delete()
+            Edge.objects.all().delete()
+            GraphProperties.objects.all().delete()
+
+            csv_file = TextIOWrapper(request.FILES['csv_file'].file, encoding='utf-8')
+            reader = csv.reader(csv_file, delimiter=';', quotechar='"')
+
+            nodes = {} # um doppelte Knoten zu vermeiden
+
+            # Überspringe die Überschriftszeile
+            next(reader)
+
+            for row in reader:
+                # Zerlege die Zeile in die drei Werte
+                node1_name, node2_name, weight = row[0].split(';')
+
+                # Knoten erstellen oder abrufen, wenn sie bereits existieren
+                node1 = nodes.get(node1_name) or Node.objects.create(name=node1_name)
+                node2 = nodes.get(node2_name) or Node.objects.create(name=node2_name)
+
+                # Kante erstellen
+                Edge.objects.create(source=node1, target=node2, weight=float(weight))
+
+                # Knoten im Wörterbuch speichern
+                nodes[node1_name] = node1
+                nodes[node2_name] = node2
+
+            calculate_and_save_graph_properties()
+
+            return redirect('grafxapp:display_graph')
+    else:
+        form = UploadCSVForm()
+    return render(request, 'grafxapp/upload_graph.html', {'form': form})
+
+
+
+
+#Informationen zum Graphen aus der Datenbank abrufen
+from django.shortcuts import render
+import json
+from .models import Edge
+
+def display_graph(request):
+    edges = Edge.objects.select_related('source', 'target').all()
+    graph_data = {
+        'nodes': [],
+        'links': [
+            {
+                'source': edge.source.name,
+                'target': edge.target.name,
+                'weight': edge.weight
+            }
+            for edge in edges
+        ]
+    }
+
+    # Extract unique nodes from the list of edges
+    nodes_set = set()
+    for link in graph_data['links']:
+        nodes_set.add(link['source'])
+        nodes_set.add(link['target'])
+    graph_data['nodes'] = [{'id': node} for node in nodes_set]
+
+    return render(request, 'grafxapp/graph.html', {'graph_data': graph_data})
+
+#werte berehcnen für den Graphen
+def calculate_and_save_graph_properties():
+    # Erstellen Sie einen leeren ungerichteten Graphen mit networkx
+    nx_graph = nx.Graph()
+
+    # Fügen Sie die Knoten und Kanten aus der Datenbank hinzu
+    edges = Edge.objects.all()
+    for edge in edges:
+        nx_graph.add_edge(edge.source.name, edge.target.name, weight=edge.weight)
+
+    # Berechnen Sie die Kennwerte
+    degree_values = dict(nx_graph.degree())
+    average_degree = sum(degree_values.values()) / len(degree_values)
+    diameter = nx.diameter(nx_graph)
+    clustering_coefficient = nx.average_clustering(nx_graph)
+    # Weitere Kennwerte, die Sie berechnen möchten
+
+    # Speichern Sie die Kennwerte in der Datenbank
+    graph_properties, created = GraphProperties.objects.get_or_create(
+        defaults={
+            'average_degree': 0.0,  # Setzen Sie hier den gewünschten Standardwert
+            'diameter': diameter,
+            'clustering_coefficient': clustering_coefficient,
+            # Setzen Sie hier weitere Standardwerte für andere Felder, falls erforderlich
+        }
+    )
+
+    # Aktualisieren Sie die berechneten Kennwerte
+    graph_properties.average_degree = average_degree
+    graph_properties.save()
+    # Fügen Sie den Code hinzu, um weitere Kennwerte in properties zu speichern
+
+    return HttpResponse("Graphentheoretische Kennwerte wurden berechnet und in der Datenbank gespeichert.")
+
+
 
 
 

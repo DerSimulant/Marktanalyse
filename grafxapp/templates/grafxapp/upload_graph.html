@@ -1,0 +1,15 @@
+{% extends "grafxapp/base.html" %}
+{% load static %}
+
+{% block title %}
+Lad ma hoch
+{% endblock %}
+
+{% block content %}
+  <h2>Graphen-CSV hochladen</h2>
+  <form action="{% url 'grafxapp:upload_csv' %}" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Hochladen</button>
+  </form>
+{% endblock %}

@@ -8,6 +8,13 @@ Herr Graf
 {% block content %}
 <div class="container">
     <h1>Der geile Graf</h1>
+    <div id="graph"></div>
+    <!--<form id="graph-options">
+        <label for="edgeWeight">Gewicht der Kante:</label>
+        <input type="number" id="edgeWeight" name="edgeWeight">
+        <label for="directedGraph">Gerichteter Graph:</label>
+        <input type="checkbox" id="directedGraph" name="directedGraph">
+    </form> -->
     <div id="d3-container"></div>
 </div>
 
@@ -15,57 +22,64 @@ Herr Graf
 <script src="https://d3js.org/d3.v5.min.js"></script>
 
 <!-- Ihr D3.js-Code -->
+
+
 <script>
-d3.json("{% static 'graph.json' %}").then(function(graph) {
-  // Breite und Höhe des SVG-Containers
-  var width = 960,
-      height = 500,
-      radius = 5;  // Radius der Knoten
+    var graphData = {{ graph_data|safe }};
 
-  // Erstellen Sie einen SVG-Container
-  var svg = d3.select("#d3-container").append("svg")
-      .attr("width", width)
-      .attr("height", height);
+console.log(graphData);
 
-  // Erstellen Sie eine D3-Kraftsimulation
-  var simulation = d3.forceSimulation()
-      .force("link", d3.forceLink().id(function(d) { return d.id; }))
-      .force("charge", d3.forceManyBody())
-      .force("center", d3.forceCenter(width / 2, height / 2));
-
-  // Fügen Sie die Knoten und Kanten zum SVG-Container hinzu
-  var link = svg.append("g")
-      .selectAll("line")
-      .data(graph.links)
-      .enter().append("line")
-      .style("stroke", "red")
-      .attr("stroke-width", 2);
-
-  var node = svg.append("g")
-      .selectAll("circle")
-      .data(graph.nodes)
-      .enter().append("circle")
-      .attr("r", radius)
-      .on("click", function(d) { 
-          // Zeigen Sie die Zentralität des Knotens an, wenn auf ihn geklickt wird
-          alert("Degree centrality: " + d.centrality); 
-      });
-
-  // Aktualisieren Sie die Knoten- und Kantenpositionen bei jeder "Tick" der Simulation
-  simulation.nodes(graph.nodes).on("tick", ticked);
-  simulation.force("link").links(graph.links);
-
-  function ticked() {
-    link
-        .attr("x1", function(d) { return d.source.x; })
-        .attr("y1", function(d) { return d.source.y; })
-        .attr("x2", function(d) { return d.target.x; })
-        .attr("y2", function(d) { return d.target.y; });
-
-    node
-        .attr("cx", function(d) { return d.x = Math.max(radius, Math.min(width - radius, d.x)); })  // Knoten innerhalb des horizontalen Bereichs halten
-        .attr("cy", function(d) { return d.y = Math.max(radius, Math.min(height - radius, d.y)); });  // Knoten innerhalb des vertikalen Bereichs halten
-  }
+// Extract unique nodes from the list of edges
+var nodesSet = new Set();
+graphData.links.forEach(function(edge) {
+    nodesSet.add(edge.source);
+    nodesSet.add(edge.target);
 });
+var nodes = Array.from(nodesSet);
+
+// Create a D3.js force-directed graph
+var svg = d3.select("#graph").append("svg")
+    .attr("width", 800)
+    .attr("height", 600);
+
+var simulation = d3.forceSimulation(graphData.nodes)
+    .force("link", d3.forceLink(graphData.links).id(d => d.id))
+    .force("charge", d3.forceManyBody())
+    .force("center", d3.forceCenter(400, 300));
+
+var link = svg.append("g")
+    .attr("class", "links")
+    .selectAll("line")
+    .data(graphData.links)
+    .enter().append("line")
+    .attr("stroke", "red") //Kanten rot darstellen
+    .attr("stroke-width", d => Math.sqrt(d.weight));
+
+var node = svg.append("g")
+    .attr("class", "nodes")
+    .selectAll("circle")
+    .data(graphData.nodes)
+    .enter().append("circle")
+    .attr("r", 5);
+
+simulation.nodes(graphData.nodes)
+    .on("tick", ticked);
+
+simulation.force("link")
+    .links(graphData.links);
+
+function ticked() {
+    link.attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+
+    node.attr("cx", d => d.x)
+        .attr("cy", d => d.y);
+
+    console.log("Node positions:", graphData.nodes);
+    console.log("Edge positions:", graphData.links);
+}
 </script>
+    
 {% endblock %}
