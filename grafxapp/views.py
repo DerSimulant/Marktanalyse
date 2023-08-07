@@ -18,8 +18,8 @@ from .forms import UploadCSVForm
 from .models import Node, Edge
 from io import TextIOWrapper
 import csv
-from .models import Node, Edge, GraphProperties
-
+from .models import Node, Edge, GraphProperties, Graph
+from django.db import transaction
 
 
 
@@ -134,45 +134,49 @@ def graph_form(request):
     return render(request, 'grafxapp/graph_form.html', {'form': form})
 
 #CSV hochladen und Daten in Datenbank speichern
+
+
+@transaction.atomic
 def upload_csv(request):
     if request.method == 'POST':
         form = UploadCSVForm(request.POST, request.FILES)
         if form.is_valid():
-
-            # Löschen der alten Daten aus der Datenbank
-            Node.objects.all().delete()
-            Edge.objects.all().delete()
-            GraphProperties.objects.all().delete()
+            # Erstellen eines neuen Graphen-Eintrags
+            graph = Graph.objects.create(name=f"Graph-{datetime.now().strftime('%Y%m%d%H%M%S')}")
 
             csv_file = TextIOWrapper(request.FILES['csv_file'].file, encoding='utf-8')
-            reader = csv.reader(csv_file, delimiter=';', quotechar='"')
+            reader = csv.reader(csv_file, delimiter=';')
 
-            nodes = {} # um doppelte Knoten zu vermeiden
+            nodes = {}  # um doppelte Knoten zu vermeiden
 
             # Überspringe die Überschriftszeile
             next(reader)
 
             for row in reader:
-                # Zerlege die Zeile in die drei Werte
-                node1_name, node2_name, weight = row[0].split(';')
+                node1_name, node1_weight, node2_name, node2_weight, weight = row
 
-                # Knoten erstellen oder abrufen, wenn sie bereits existieren
-                node1 = nodes.get(node1_name) or Node.objects.create(name=node1_name)
-                node2 = nodes.get(node2_name) or Node.objects.create(name=node2_name)
+                if node1_name not in nodes:
+                    node1, _ = Node.objects.get_or_create(name=node1_name, graph=graph, defaults={"weight": float(node1_weight)})
+                    nodes[node1_name] = node1
+                else:
+                    node1 = nodes[node1_name]
 
-                # Kante erstellen
-                Edge.objects.create(source=node1, target=node2, weight=float(weight))
+                if node2_name not in nodes:
+                    node2, _ = Node.objects.get_or_create(name=node2_name, graph=graph, defaults={"weight": float(node2_weight)})
+                    nodes[node2_name] = node2
+                else:
+                    node2 = nodes[node2_name]
 
-                # Knoten im Wörterbuch speichern
-                nodes[node1_name] = node1
-                nodes[node2_name] = node2
+                Edge.objects.create(source=node1, target=node2, weight=float(weight), graph=graph)
 
-            calculate_and_save_graph_properties()
+                calculate_and_save_graph_properties(graph)
+
 
             return redirect('grafxapp:display_graph')
     else:
         form = UploadCSVForm()
     return render(request, 'grafxapp/upload_graph.html', {'form': form})
+
 
 
 
@@ -183,9 +187,23 @@ import json
 from .models import Edge
 
 def display_graph(request):
-    edges = Edge.objects.select_related('source', 'target').all()
+    # Wenn ein Graph ausgewählt wurde
+    selected_graph_id = request.GET.get('graph_id')
+    if selected_graph_id:
+        selected_graph = Graph.objects.get(pk=selected_graph_id)
+    else:
+        selected_graph = None
+
+    # Wenn kein Graph ausgewählt ist, nehmen Sie den neuesten Graphen
+    if not selected_graph:
+        selected_graph = Graph.objects.last()
+
+    # Abrufen von Kanten und Knoten des ausgewählten Graphen
+    edges = Edge.objects.select_related('source', 'target').filter(graph=selected_graph)
+    nodes = Node.objects.filter(graph=selected_graph)
+
     graph_data = {
-        'nodes': [],
+        'nodes': [{'id': node.name, 'weight': node.weight, 'degree': node.degree, 'centrality': node.centrality} for node in nodes],
         'links': [
             {
                 'source': edge.source.name,
@@ -196,45 +214,72 @@ def display_graph(request):
         ]
     }
 
-    # Extract unique nodes from the list of edges
-    nodes_set = set()
-    for link in graph_data['links']:
-        nodes_set.add(link['source'])
-        nodes_set.add(link['target'])
-    graph_data['nodes'] = [{'id': node} for node in nodes_set]
+    # Alle verfügbaren Graphen holen
+    all_graphs = Graph.objects.all()
+    graph_properties = GraphProperties.objects.filter(graph=selected_graph).first()
+    return render(request, 'grafxapp/graph.html', {
+        'graph_data': graph_data,
+        'all_graphs': all_graphs,
+        'selected_graph': selected_graph,
+        'graph_properties': graph_properties
+    })
 
-    return render(request, 'grafxapp/graph.html', {'graph_data': graph_data})
 
 #werte berehcnen für den Graphen
-def calculate_and_save_graph_properties():
+def calculate_and_save_graph_properties(graph):
     # Erstellen Sie einen leeren ungerichteten Graphen mit networkx
     nx_graph = nx.Graph()
 
     # Fügen Sie die Knoten und Kanten aus der Datenbank hinzu
-    edges = Edge.objects.all()
+    edges = Edge.objects.filter(graph=graph)
     for edge in edges:
         nx_graph.add_edge(edge.source.name, edge.target.name, weight=edge.weight)
 
     # Berechnen Sie die Kennwerte
+    # Durchschnittlicher Grad
     degree_values = dict(nx_graph.degree())
-    average_degree = sum(degree_values.values()) / len(degree_values)
-    diameter = nx.diameter(nx_graph)
-    clustering_coefficient = nx.average_clustering(nx_graph)
-    # Weitere Kennwerte, die Sie berechnen möchten
+    if degree_values:
+        average_degree = sum(degree_values.values()) / len(degree_values)
+    else:
+        average_degree = 0
+
+    # Durchmesser
+    # Durchmesser
+    if nx_graph.nodes() and nx_graph.edges() and nx.is_connected(nx_graph):
+        diameter = nx.diameter(nx_graph)
+    else:
+        diameter = 0  # oder einen anderen Platzhalterwert
+
+    # Clustering-Koeffizient
+    if nx_graph.nodes():
+        clustering_coefficient = nx.average_clustering(nx_graph)
+    else:
+        clustering_coefficient = 0
+
+    # Zentralität
+    if nx_graph.nodes() and nx_graph.edges():
+        centrality_values = nx.betweenness_centrality(nx_graph, weight='weight')
+    else:
+        centrality_values = {}
+
+# Knotengrad (dies wurde bereits oben berechnet, also brauchen wir es hier nicht nochmal)
+# degree_values = dict(nx_graph.degree())
+
+
+    for node_name in nx_graph.nodes():
+        node = Node.objects.get(name=node_name, graph=graph)
+        node.centrality = centrality_values.get(node_name, 0)
+        node.degree = degree_values.get(node_name, 0)
+        node.save()
 
     # Speichern Sie die Kennwerte in der Datenbank
-    graph_properties, created = GraphProperties.objects.get_or_create(
-        defaults={
-            'average_degree': 0.0,  # Setzen Sie hier den gewünschten Standardwert
-            'diameter': diameter,
-            'clustering_coefficient': clustering_coefficient,
-            # Setzen Sie hier weitere Standardwerte für andere Felder, falls erforderlich
-        }
-    )
-
-    # Aktualisieren Sie die berechneten Kennwerte
+    graph_properties, created = GraphProperties.objects.get_or_create(graph=graph)
     graph_properties.average_degree = average_degree
+    graph_properties.diameter = diameter
+    graph_properties.clustering_coefficient = clustering_coefficient
     graph_properties.save()
+
+
     # Fügen Sie den Code hinzu, um weitere Kennwerte in properties zu speichern
 
     return HttpResponse("Graphentheoretische Kennwerte wurden berechnet und in der Datenbank gespeichert.")

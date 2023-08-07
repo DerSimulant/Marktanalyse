@@ -15,7 +15,23 @@ Herr Graf
         <label for="directedGraph">Gerichteter Graph:</label>
         <input type="checkbox" id="directedGraph" name="directedGraph">
     </form> -->
+    <form method="get">
+        <select name="graph_id" onchange="this.form.submit()">
+            {% for graph in all_graphs %}
+                <option value="{{ graph.id }}" {% if selected_graph.id == graph.id %}selected{% endif %}>{{ graph.name }}</option>
+            {% endfor %}
+        </select>
+    </form>
     <div id="d3-container"></div>
+</div>
+<div class="graph-properties">
+    <h2>Netzwerkeigenschaften</h2>
+    <ul>
+        <li>Durchschnittlicher Grad: {{ graph_properties.average_degree }}</li>
+        <li>Durchmesser: {{ graph_properties.diameter }}</li>
+        <li>Clustering-Koeffizient: {{ graph_properties.clustering_coefficient }}</li>
+        <!-- Fügen Sie hier weitere Kennwerte hinzu, falls gewünscht -->
+    </ul>
 </div>
 
 <!-- Einbinden von D3.js -->
@@ -25,17 +41,19 @@ Herr Graf
 
 
 <script>
-    var graphData = {{ graph_data|safe }};
+   // var graphData = {{ graph_data|safe }};
 
 console.log(graphData);
 
-// Extract unique nodes from the list of edges
-var nodesSet = new Set();
-graphData.links.forEach(function(edge) {
-    nodesSet.add(edge.source);
-    nodesSet.add(edge.target);
-});
-var nodes = Array.from(nodesSet);
+var graphData = {{ graph_data|safe }};
+
+// Extract unique nodes from the list of edges (diese Zeilen sind jetzt nicht mehr notwendig, da wir die Knoten direkt aus graphData.nodes erhalten)
+// var nodesSet = new Set();
+// graphData.links.forEach(function(edge) {
+//     nodesSet.add(edge.source);
+//     nodesSet.add(edge.target);
+// });
+// var nodes = Array.from(nodesSet);
 
 // Create a D3.js force-directed graph
 var svg = d3.select("#graph").append("svg")
@@ -52,15 +70,26 @@ var link = svg.append("g")
     .selectAll("line")
     .data(graphData.links)
     .enter().append("line")
-    .attr("stroke", "red") //Kanten rot darstellen
+    .attr("stroke", "red") // Kanten rot darstellen
     .attr("stroke-width", d => Math.sqrt(d.weight));
 
-var node = svg.append("g")
-    .attr("class", "nodes")
-    .selectAll("circle")
+var nodeGroup = svg.append("g")
+    .attr("class", "nodeGroups")
+    .selectAll(".nodeGroup")
     .data(graphData.nodes)
-    .enter().append("circle")
-    .attr("r", 5);
+    .enter().append("g")
+    .attr("class", "nodeGroup");
+
+nodeGroup.append("circle")
+    .attr("r", 5); // Oder Sie können den Knotenradius basierend auf dem Knotengewicht anpassen.
+
+nodeGroup.append("text")
+    .text(d => d.id)
+    .attr("dx", 12)
+    .attr("dy", ".35em");
+
+nodeGroup.append("title")
+    .text(d => `Weight: ${d.weight}, Degree: ${d.degree}, Centrality: ${d.centrality}`);
 
 simulation.nodes(graphData.nodes)
     .on("tick", ticked);
@@ -74,12 +103,13 @@ function ticked() {
         .attr("x2", d => d.target.x)
         .attr("y2", d => d.target.y);
 
-    node.attr("cx", d => d.x)
-        .attr("cy", d => d.y);
+    nodeGroup.attr("transform", d => `translate(${d.x}, ${d.y})`);
+}
+
 
     console.log("Node positions:", graphData.nodes);
     console.log("Edge positions:", graphData.links);
-}
+
 </script>
     
 {% endblock %}
