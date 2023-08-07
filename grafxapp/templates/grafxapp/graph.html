@@ -8,20 +8,51 @@ Herr Graf
 {% block content %}
 <div class="container">
     <h1>Der geile Graf</h1>
+    {% if error_message %}
+    <div class="alert alert-danger">
+        {{ error_message }}
+    </div>
+    {% endif %}
+    <label for="linkDistanceSlider">Link-Distanz:</label>
+    <input type="range" min="10" max="300" value="100" id="linkDistanceSlider">
+
     <div id="graph"></div>
-    <!--<form id="graph-options">
-        <label for="edgeWeight">Gewicht der Kante:</label>
-        <input type="number" id="edgeWeight" name="edgeWeight">
-        <label for="directedGraph">Gerichteter Graph:</label>
-        <input type="checkbox" id="directedGraph" name="directedGraph">
-    </form> -->
+   
     <form method="get">
         <select name="graph_id" onchange="this.form.submit()">
             {% for graph in all_graphs %}
-                <option value="{{ graph.id }}" {% if selected_graph.id == graph.id %}selected{% endif %}>{{ graph.name }}</option>
+            <option value="{{ graph.id }}" {% if selected_graph.id == graph.id %}selected{% endif %}>{{ graph.name }}</option>
             {% endfor %}
         </select>
     </form>
+    <div class="form-container">
+        <div class="card mb-3">
+            <div class="card-body">
+                <!-- Add Node Form -->
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="graph_id" value="{{ selected_graph.id }}">
+                    {{ node_form.as_p }}
+                    <input type="submit" name="add_node" value="Knoten hinzufügen" class="btn btn-primary">
+                </form>
+                
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <!-- Add Edge Form -->
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="graph_id" value="{{ selected_graph.id }}">
+                    {{ edge_form.as_p }}
+                    <input type="submit" name="add_edge" value="Kante hinzufügen" class="btn btn-primary">
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    
+    
     <div id="d3-container"></div>
 </div>
 <div class="graph-properties">
@@ -33,6 +64,8 @@ Herr Graf
         <!-- Fügen Sie hier weitere Kennwerte hinzu, falls gewünscht -->
     </ul>
 </div>
+
+
 
 <!-- Einbinden von D3.js -->
 <script src="https://d3js.org/d3.v5.min.js"></script>
@@ -47,31 +80,53 @@ console.log(graphData);
 
 var graphData = {{ graph_data|safe }};
 
-// Extract unique nodes from the list of edges (diese Zeilen sind jetzt nicht mehr notwendig, da wir die Knoten direkt aus graphData.nodes erhalten)
-// var nodesSet = new Set();
-// graphData.links.forEach(function(edge) {
-//     nodesSet.add(edge.source);
-//     nodesSet.add(edge.target);
-// });
-// var nodes = Array.from(nodesSet);
-
 // Create a D3.js force-directed graph
 var svg = d3.select("#graph").append("svg")
     .attr("width", 800)
     .attr("height", 600);
+
+// Skalierungsfunktion für den Knotenradius basierend auf dem Gewicht
+var radiusScale = d3.scaleLinear()
+    .domain([d3.min(graphData.nodes, d => d.weight), d3.max(graphData.nodes, d => d.weight)])
+    .range([5, 20]);  // Min und Max Radius
+
+var colorScale = d3.scaleOrdinal()
+    .domain([
+        'IT', 'FIN', 'HEA', 'CAR', 'CON', 'CHE', 'EL', 'LOG', 'TOUR', 
+        'AGR', 'EDU', 'ENE', 'FAS', 'FOO', 'GOV', 'MED', 'MIN', 'PHAR', 
+        'REA', 'RET', 'SPOR', 'TEL', 'TRAV', 'ENT', 'UNK'
+    ])
+    .range([
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', 
+        '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#1fa1db', '#e2a12d',
+        '#52a738', '#c7233a', '#9b5db5', '#8b543b', '#e777d2', '#7d7d7d',
+        '#c9de23', '#27aecf', '#2ea1ab', '#f2b12d', '#62b748', '#d7235a',
+        '#a6a6a6' //grau für unbekannt
+    ]);
+
 
 var simulation = d3.forceSimulation(graphData.nodes)
     .force("link", d3.forceLink(graphData.links).id(d => d.id))
     .force("charge", d3.forceManyBody())
     .force("center", d3.forceCenter(400, 300));
 
+function linkColor(d) {
+    if (d.weight > 0) {
+        return "green";
+    } else if (d.weight < 0) {
+        return "red";
+    } else {
+        return "gray";  // Für Gewichte, die genau 0 sind
+    }
+}    
 var link = svg.append("g")
     .attr("class", "links")
     .selectAll("line")
     .data(graphData.links)
     .enter().append("line")
-    .attr("stroke", "red") // Kanten rot darstellen
-    .attr("stroke-width", d => Math.sqrt(d.weight));
+    .attr("stroke", linkColor)  // Verwenden Sie die linkColor Funktion
+    .attr("stroke-width", d => d.weight);
+console.log(graphData.links);
 
 var nodeGroup = svg.append("g")
     .attr("class", "nodeGroups")
@@ -80,8 +135,40 @@ var nodeGroup = svg.append("g")
     .enter().append("g")
     .attr("class", "nodeGroup");
 
+
+// Daten für die Legende
+var legendData = colorScale.domain().map(function(branche) {
+    return {
+        branche: branche,
+        color: colorScale(branche)
+    };
+});
+
+// Legende zeichnen
+var legend = svg.selectAll(".legend")
+    .data(legendData)
+    .enter().append("g")
+    .attr("class", "legend")
+    .attr("transform", function(d, i) { return "translate(0," + (i * 20) + ")"; }); // Positionieren Sie jedes Legendenelement
+// Rechtecke für die Farben
+legend.append("rect")
+    .attr("x", 10)
+    .attr("width", 18)
+    .attr("height", 18)
+    .style("fill", d => d.color);
+
+// Text für die Branchenbeschreibungen
+legend.append("text")
+    .attr("x", 40)
+    .attr("y", 9)
+    .attr("dy", ".35em")
+    .style("text-anchor", "start")
+    .text(d => d.branche);
+
 nodeGroup.append("circle")
-    .attr("r", 5); // Oder Sie können den Knotenradius basierend auf dem Knotengewicht anpassen.
+    .attr("r", d => radiusScale(d.weight)) // Setzen des Knotenradius basierend auf dem Knotengewicht
+    .attr("fill", d => colorScale(d.branche));  // Setzen der Füllfarbe basierend auf der Branche
+    
 
 nodeGroup.append("text")
     .text(d => d.id)
@@ -90,6 +177,26 @@ nodeGroup.append("text")
 
 nodeGroup.append("title")
     .text(d => `Weight: ${d.weight}, Degree: ${d.degree}, Centrality: ${d.centrality}`);
+
+nodeGroup.on("click", function(d) {
+    d3.selectAll(".selected").classed("selected", false);  // Entfernen Sie die vorherige Auswahl
+    d3.select(this).classed("selected", true);  // Aktuellen Knoten als ausgewählt markieren
+});
+
+link.on("click", function(d) {
+    d3.selectAll(".selected").classed("selected", false);  // Entfernen Sie die vorherige Auswahl
+    d3.select(this).classed("selected", true);  // Aktuelle Kante als ausgewählt markieren
+});
+
+d3.select("#linkDistanceSlider").on("input", function() {
+    var linkDistanceValue = +this.value;  // Wandelt den Wert in eine Zahl um
+    
+    // Setzt die Link-Distanz und startet die Simulation neu
+    simulation.force("link").distance(linkDistanceValue);
+    simulation.alpha(1).restart();
+});
+
+
 
 simulation.nodes(graphData.nodes)
     .on("tick", ticked);
@@ -107,8 +214,13 @@ function ticked() {
 }
 
 
-    console.log("Node positions:", graphData.nodes);
-    console.log("Edge positions:", graphData.links);
+
+
+
+
+console.log("Node positions:", graphData.nodes);
+console.log("Edge positions:", graphData.links);
+
 
 </script>
     

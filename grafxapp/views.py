@@ -14,12 +14,12 @@ import json
 
 from .forms import GraphForm
 import networkx as nx
-from .forms import UploadCSVForm
+from .forms import UploadCSVForm, NodeForm, EdgeForm
 from .models import Node, Edge
 from io import TextIOWrapper
 import csv
 from .models import Node, Edge, GraphProperties, Graph
-from django.db import transaction
+from django.db import transaction, IntegrityError
 
 
 
@@ -186,43 +186,66 @@ from django.shortcuts import render
 import json
 from .models import Edge
 
-def display_graph(request):
-    # Wenn ein Graph ausgewählt wurde
-    selected_graph_id = request.GET.get('graph_id')
-    if selected_graph_id:
-        selected_graph = Graph.objects.get(pk=selected_graph_id)
-    else:
-        selected_graph = None
+from django.db import IntegrityError
 
-    # Wenn kein Graph ausgewählt ist, nehmen Sie den neuesten Graphen
-    if not selected_graph:
-        selected_graph = Graph.objects.last()
+from django.db import IntegrityError
+
+def display_graph(request):
+    print(request.POST)  # Debugging: Zeige die POST-Daten
+
+    error_message = None
+    selected_graph_id = request.GET.get('graph_id') or request.POST.get('graph_id')
+    selected_graph = Graph.objects.get(pk=selected_graph_id) if selected_graph_id else Graph.objects.last()
+
+    node_form = NodeForm(request.POST or None, initial={'graph': selected_graph})
+    edge_form = EdgeForm(request.POST or None, initial={'graph': selected_graph})
+
+    if request.method == "POST":
+        if "add_node" in request.POST:
+            if node_form.is_valid():
+                new_node = node_form.save(commit=False)
+                new_node.graph = selected_graph
+                try:
+                    new_node.save()
+                    print(f"Node {new_node.name} wurde erfolgreich gespeichert.")  # Debugging
+                    return HttpResponseRedirect(f"{reverse('grafxapp:display_graph')}?graph_id={selected_graph.id}")
+                except IntegrityError:
+                    print("IntegrityError: Ein Knoten mit diesem Namen existiert bereits in diesem Graphen.")  # Debugging
+                    error_message = "Ein Knoten mit diesem Namen existiert bereits in diesem Graphen."
+
+        elif "add_edge" in request.POST:
+            if edge_form.is_valid():
+                new_edge = edge_form.save(commit=False)
+                new_edge.graph = selected_graph
+                new_edge.save()
+                print(f"Edge von {new_edge.source.name} zu {new_edge.target.name} wurde erfolgreich gespeichert.")  # Debugging
+                return HttpResponseRedirect(f"{reverse('grafxapp:display_graph')}?graph_id={selected_graph.id}")
+            else:
+                print(edge_form.errors)  # Debugging
+                error_message = "Es gab ein Problem beim Hinzufügen der Kante."
 
     # Abrufen von Kanten und Knoten des ausgewählten Graphen
     edges = Edge.objects.select_related('source', 'target').filter(graph=selected_graph)
     nodes = Node.objects.filter(graph=selected_graph)
 
     graph_data = {
-        'nodes': [{'id': node.name, 'weight': node.weight, 'degree': node.degree, 'centrality': node.centrality} for node in nodes],
-        'links': [
-            {
-                'source': edge.source.name,
-                'target': edge.target.name,
-                'weight': edge.weight
-            }
-            for edge in edges
-        ]
+        'nodes': [{'id': node.name, 'weight': node.weight, 'degree': node.degree, 'centrality': node.centrality, 'branche':node.branche} for node in nodes],
+        'links': [{'source': edge.source.name, 'target': edge.target.name, 'weight': edge.weight} for edge in edges]
     }
 
-    # Alle verfügbaren Graphen holen
     all_graphs = Graph.objects.all()
     graph_properties = GraphProperties.objects.filter(graph=selected_graph).first()
+
     return render(request, 'grafxapp/graph.html', {
         'graph_data': graph_data,
         'all_graphs': all_graphs,
         'selected_graph': selected_graph,
-        'graph_properties': graph_properties
+        'graph_properties': graph_properties,
+        'node_form': node_form,
+        'edge_form': edge_form,
+        'error_message': error_message
     })
+
 
 
 #werte berehcnen für den Graphen
@@ -283,6 +306,10 @@ def calculate_and_save_graph_properties(graph):
     # Fügen Sie den Code hinzu, um weitere Kennwerte in properties zu speichern
 
     return HttpResponse("Graphentheoretische Kennwerte wurden berechnet und in der Datenbank gespeichert.")
+
+
+
+
 
 
 

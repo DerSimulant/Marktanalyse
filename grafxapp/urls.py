@@ -15,4 +15,5 @@ urlpatterns = [
     #path('graph/', views.graph, name='graph'),
     path('upload_csv/', views.upload_csv, name='upload_csv'),
     path('graph/', views.display_graph, name='display_graph'),
+    
 ]

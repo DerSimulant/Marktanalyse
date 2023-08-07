@@ -9,6 +9,8 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-table/1.18.3/extensions/filter-control/bootstrap-table-filter-control.min.css">
+    
+
 
     <style> body {
         display: flex;
@@ -21,6 +23,21 @@
     .bootstrap-table .fixed-table-loading {
     display: none;
 }
+    .form-container {
+      display: flex;
+      justify-content: space-between;  /* Verteilt die Formulare gleichmäßig im Container */
+      background-color: #333;
+      padding: 20px;
+      border-radius: 10px;
+      color: #fff;  /* Setzen Sie die Textfarbe auf Weiß */
+      
+}
+
+    .form-group {
+      margin: 10px;  /* Fügt einen Abstand zwischen den Formularen hinzu */
+      flex: 1;      /* Erlaubt den Formularen, den verfügbaren Platz im Container gleichmäßig zu nutzen */
+}
+
  </style>    
     {% block header %}{% endblock %}
 </head>
